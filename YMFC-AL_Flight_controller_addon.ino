@@ -26,17 +26,6 @@ float pid_i_gain_roll = 0.05;              //Gain setting for the roll I-control
 float pid_d_gain_roll = 18;                //Gain setting for the roll D-controller
 int pid_max_roll = 400;                    //Maximum output of the PID-controller (+/-)
 
-// 8.5 props
-// 1.3 | 1.2 | 1.2 | 1.2 | 1.2 | 1.3 | 1.3 | 1.3
-// .04 | .04 | .04 | .04 | .04 | .05 | .05 | .05
-// 18  | 13  | 13  | 16  | 18  | 18  | 16  | 18
-
-// 10.5 props
-// 1.3 | 1.3 | 1.3
-// .05 | .04 | .04
-// 18  | 18  | 18
-
-
 float pid_p_gain_pitch = pid_p_gain_roll;  //Gain setting for the pitch P-controller.
 float pid_i_gain_pitch = pid_i_gain_roll;  //Gain setting for the pitch I-controller.
 float pid_d_gain_pitch = pid_d_gain_roll;  //Gain setting for the pitch D-controller.
@@ -46,17 +35,6 @@ float pid_p_gain_yaw = 4.0;                //Gain setting for the pitch P-contro
 float pid_i_gain_yaw = 0.02;               //Gain setting for the pitch I-controller. //0.02
 float pid_d_gain_yaw = 0.00;                //Gain setting for the pitch D-controller.
 int pid_max_yaw = 400;                     //Maximum output of the PID-controller (+/-)
-
-// 8.5 props
-// 4   | 3   | 3.5 | 4
-// .02 | .02 | .02 | .02
-// .00 | .00 | .00 | .0
-
-// 10.5 props
-// 3.2 | 4.0
-// .02 | .02
-// .02 | 0
-
 
 boolean auto_level = true;                 //Auto level on (true) or off (false)
 
@@ -77,8 +55,8 @@ int acc_axis[4], gyro_axis[4];
 float roll_level_adjust, pitch_level_adjust;
 
 long acc_x, acc_y, acc_z, acc_total_vector;
-unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4, timer_channel_5, esc_timer, esc_loop_timer;
-unsigned long timer_1, timer_2, timer_3, timer_4, timer_5, current_time;
+unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4, esc_timer, esc_loop_timer;
+unsigned long timer_1, timer_2, timer_3, timer_4, current_time;
 unsigned long loop_timer;
 unsigned long print_counter;
 double gyro_pitch, gyro_roll, gyro_yaw;
@@ -89,6 +67,9 @@ float pid_i_mem_pitch, pid_pitch_setpoint, gyro_pitch_input, pid_output_pitch, p
 float pid_i_mem_yaw, pid_yaw_setpoint, gyro_yaw_input, pid_output_yaw, pid_last_yaw_d_error;
 float angle_roll_acc, angle_pitch_acc, angle_pitch, angle_roll;
 boolean gyro_angles_set;
+
+// Addon
+unsigned long timer_channel_5, timer_5;
 byte addon_activated;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,7 +87,8 @@ void setup(){
   TWBR = 12;                                                                //Set the I2C clock speed to 400kHz.
 
   //Arduino (Atmega) pins default to inputs, so they don't need to be explicitly declared as inputs.
-  DDRD |= B11111000;                                                        //Configure digital port 4, 5, 6 and 7 as output. (port 3 blue led)
+  // Addon
+  DDRD |= B11111000;                                                        //Configure digital port 4, 5, 6 and 7 as output. and 3 for the Addon device
   DDRB |= B00010000;                                                        //Configure digital port 12 as output.
 
   //Use the led on the Arduino for startup indication.
@@ -151,6 +133,8 @@ void setup(){
   PCMSK0 |= (1 << PCINT1);                                                  //Set PCINT1 (digital input 9)to trigger an interrupt on state change.
   PCMSK0 |= (1 << PCINT2);                                                  //Set PCINT2 (digital input 10)to trigger an interrupt on state change.
   PCMSK0 |= (1 << PCINT3);                                                  //Set PCINT3 (digital input 11)to trigger an interrupt on state change.
+
+  // Addon
   PCMSK0 |= (1 << PCINT5);                                                  //Set PCINT5 (digital input 13)to trigger an interrupt on state change.
 
   //Wait until the receiver is active and the throtle is set to the lower position.
@@ -170,6 +154,7 @@ void setup(){
   }
   start = 0;                                                                //Set start back to 0.
 
+  // Addon
   // set the addon device to not activated
   addon_activated = 0;
 
@@ -350,14 +335,7 @@ void loop(){
     esc_4 = 1000;                                                           //If start is not 2 keep a 1000us pulse for ess-4.
   }
 
-//  // send channel 5 value every 4 seconds
-//  if(print_counter++ >= 200) {
-//    Serial.print("Rec 5 = ");                                               // print as an ASCII-encoded decimal
-//    Serial.println(receiver_input[5], DEC);                                 // print as an ASCII-encoded decimal
-//    Serial.print("Batt = ");                                                // print as an ASCII-encoded decimal
-//    Serial.println(battery_voltage, DEC);                                   // print as an ASCII-encoded decimal
-//    print_counter = 0;
-//  }
+  // Addon
   if(receiver_input[5] > 1500 && !addon_activated) {                          // activate the addon
     PORTD |= B00001000;
     addon_activated = 1;
@@ -400,7 +378,7 @@ void loop(){
     if(timer_channel_4 <= esc_loop_timer)PORTD &= B01111111;                //Set digital output 7 to low if the time is expired.
   }
 
-  if(addon_activated > 0 && addon_activated < 126) {                        // generate the .5 second pluse for the addon device
+  if(addon_activated > 0 && addon_activated < 126) {                        // generate the .5 second pulse for the addon device
     addon_activated++;  
   } else {
     PORTD &= B11110111;
@@ -460,6 +438,7 @@ ISR(PCINT0_vect){
     last_channel_4 = 0;                                                     //Remember current input state.
     receiver_input[4] = current_time - timer_4;                             //Channel 4 is current_time - timer_4.
   }
+  // Addon
   //Channel 5=========================================
   if(PINB & B00100000 ){                                                    //Is input 13 high?
     if(last_channel_5 == 0){                                                //Input 13 changed from 0 to 1.
