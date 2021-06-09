@@ -605,7 +605,6 @@ void set_gyro_registers(){
     Wire.beginTransmission(gyro_address);                                      //Start communication with the address found during search
     Wire.write(0x1A);                                                          //We want to write to the CONFIG register (1A hex)
     Wire.write(0x03);                                                          //Set the register bits as 00000011 (Set Digital Low Pass Filter to ~43Hz)
-    Wire.endTransmission();                                                    //End the transmission with the gyro    
-
+    Wire.endTransmission();                                                    //End the transmission with the gyro
   }  
 }
